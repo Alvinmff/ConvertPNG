@@ -13,8 +13,14 @@ app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-UPLOAD_DIR = os.path.join(BASE_DIR, 'uploads')
-OUTPUT_DIR = os.path.join(BASE_DIR, 'outputs')
+
+# Gunakan direktori /tmp untuk Vercel (Environment Read-Only)
+if os.environ.get('VERCEL') or os.environ.get('VERCEL_ENV'):
+    UPLOAD_DIR = '/tmp/uploads'
+    OUTPUT_DIR = '/tmp/outputs'
+else:
+    UPLOAD_DIR = os.path.join(BASE_DIR, 'uploads')
+    OUTPUT_DIR = os.path.join(BASE_DIR, 'outputs')
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
