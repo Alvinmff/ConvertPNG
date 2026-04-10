@@ -648,6 +648,127 @@
                 gap: 8px;
             }
         }
+
+        /* ═══════════════════════════════════════════
+           USAGE GUIDE MODAL
+           ═══════════════════════════════════════════ */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(8px);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .modal-content {
+            background: rgba(15, 23, 42, 0.95);
+            border: 1px solid rgba(148, 163, 184, 0.15);
+            border-radius: 24px;
+            max-width: 600px;
+            width: 100%;
+            padding: 32px;
+            position: relative;
+            transform: scale(0.9) translateY(20px);
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-overlay.active .modal-content {
+            transform: scale(1) translateY(0);
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(148, 163, 184, 0.1);
+            border: none;
+            color: #94a3b8;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+
+        .modal-close:hover {
+            background: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+        }
+
+        .guide-steps {
+            margin-top: 24px;
+        }
+
+        .guide-step {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .step-num {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 0.9rem;
+            flex-shrink: 0;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+        }
+
+        .step-body h4 {
+            color: #f1f5f9;
+            font-size: 1rem;
+            margin-bottom: 4px;
+        }
+
+        .step-body p {
+            color: #94a3b8;
+            font-size: 0.85rem;
+            line-height: 1.5;
+        }
+
+        .btn-guide-trigger {
+            background: rgba(148, 163, 184, 0.08);
+            border: 1px solid rgba(148, 163, 184, 0.15);
+            color: #94a3b8;
+            padding: 8px 16px;
+            border-radius: 100px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            cursor: pointer;
+            margin-top: 16px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s ease;
+        }
+
+        .btn-guide-trigger:hover {
+            background: rgba(148, 163, 184, 0.15);
+            color: #f1f5f9;
+            border-color: rgba(148, 163, 184, 0.3);
+        }
     </style>
 </head>
 <body>
@@ -661,6 +782,9 @@
         </div>
         <h1>Rainfall Matrix Converter</h1>
         <p>Konversi gambar Matriks Curah Hujan ke Excel dengan preservasi warna 100%</p>
+        <button class="btn-guide-trigger" id="openGuide">
+            <span>💡</span> Panduan Penggunaan
+        </button>
     </header>
 
     <div class="container">
@@ -772,7 +896,62 @@
         <p>BMKG Rainfall Matrix Converter — Magang 2026</p>
     </footer>
 
+    <!-- ═══ MODAL PANDUAN ═══ -->
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal-content">
+            <button class="modal-close" id="closeGuide">✕</button>
+            <div class="card-title">
+                <span class="icon">💡</span>
+                Cara Penggunaan Aplikasi
+            </div>
+            <div class="guide-steps">
+                <div class="guide-step">
+                    <div class="step-num">1</div>
+                    <div class="step-body">
+                        <h4>Siapkan Gambar</h4>
+                        <p>Pastikan gambar "Matriks Curah Hujan" memiliki pencahayaan cukup, tidak miring, dan seluruh grid tabel terlihat jelas.</p>
+                    </div>
+                </div>
+                <div class="guide-step">
+                    <div class="step-num">2</div>
+                    <div class="step-body">
+                        <h4>Upload ke Aplikasi</h4>
+                        <p>Tarik gambar ke area upload atau klik kotak upload untuk memilih file foto dari komputer/HP Anda.</p>
+                    </div>
+                </div>
+                <div class="guide-step">
+                    <div class="step-num">3</div>
+                    <div class="step-body">
+                        <h4>Mulai Konversi</h4>
+                        <p>Klik tombol <b>Konversi Sekarang</b>. Sistem akan menggunakan AI & OCR untuk mendeteksi warna dan angka di setiap sel.</p>
+                    </div>
+                </div>
+                <div class="guide-step">
+                    <div class="step-num">4</div>
+                    <div class="step-body">
+                        <h4>Cek & Download</h4>
+                        <p>Periksa hasil konversi pada tabel preview di bawah. Jika sudah sesuai, klik <b>Download Excel</b> untuk menyimpan file.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
+        /* ═══════════════════════════════════════════
+           DOM ELEMENTS
+           ═══════════════════════════════════════════ */
+        const openGuide = document.getElementById('openGuide');
+        const closeGuide = document.getElementById('closeGuide');
+        const modalOverlay = document.getElementById('modalOverlay');
+
+        // Modal Logic
+        openGuide.addEventListener('click', () => modalOverlay.classList.add('active'));
+        closeGuide.addEventListener('click', () => modalOverlay.classList.remove('active'));
+        modalOverlay.addEventListener('click', (e) => {
+            if (e.target === modalOverlay) modalOverlay.classList.remove('active');
+        });
+
         /* ═══════════════════════════════════════════
            STATE
            ═══════════════════════════════════════════ */
