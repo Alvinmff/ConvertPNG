@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BMKG Rainfall Matrix Converter</title>
+    <meta name="description" content="Konversi gambar Matriks Curah Hujan BMKG ke Excel dengan preservasi warna 100%">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        /* ═══════════════════════════════════════════
+           RESET & BASE
+           ═══════════════════════════════════════════ */
+        *, *::before, *::after {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #0a0e1a;
+            color: #e2e8f0;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* ═══════════════════════════════════════════
+           ANIMATED BACKGROUND
+           ═══════════════════════════════════════════ */
+        .bg-gradient {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: -1;
+            background: 
+                radial-gradient(ellipse at 20% 20%, rgba(30, 64, 175, 0.15) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 80%, rgba(16, 185, 129, 0.1) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 50%, rgba(99, 102, 241, 0.05) 0%, transparent 70%),
+                linear-gradient(180deg, #0a0e1a 0%, #0f172a 50%, #0c1222 100%);
+        }
+
+        /* ═══════════════════════════════════════════
+           HEADER
+           ═══════════════════════════════════════════ */
+        .header {
+            text-align: center;
+            padding: 48px 24px 16px;
+        }
+
+        .header-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(30, 64, 175, 0.15);
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            border-radius: 100px;
+            padding: 6px 16px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: #60a5fa;
+            margin-bottom: 20px;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        .header h1 {
+            font-size: 2.2rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #60a5fa 0%, #34d399 50%, #a78bfa 100%);
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 12px;
+            line-height: 1.2;
+        }
+
+        .header p {
+            color: #94a3b8;
+            font-size: 1rem;
+            font-weight: 300;
+            max-width: 500px;
+            margin: 0 auto;
+            line-height: 1.6;
+        }
+
+        /* ═══════════════════════════════════════════
+           MAIN CONTAINER
+           ═══════════════════════════════════════════ */
+        .container {
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        /* ═══════════════════════════════════════════
+           GLASS CARD
+           ═══════════════════════════════════════════ */
+        .card {
+            background: rgba(15, 23, 42, 0.7);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid rgba(148, 163, 184, 0.08);
+            border-radius: 20px;
+            padding: 32px;
+            margin-bottom: 24px;
+            transition: border-color 0.3s ease;
+        }
+
+        .card:hover {
+            border-color: rgba(148, 163, 184, 0.15);
+        }
+
+        .card-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #f1f5f9;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card-title .icon {
+            font-size: 1.3rem;
+        }
+
+        /* ═══════════════════════════════════════════
+           UPLOAD ZONE
+           ═══════════════════════════════════════════ */
+        .upload-zone {
+            border: 2px dashed rgba(59, 130, 246, 0.3);
+            border-radius: 16px;
+            padding: 48px 24px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: rgba(59, 130, 246, 0.03);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .upload-zone::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at 50% 50%, rgba(59, 130, 246, 0.06) 0%, transparent 70%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .upload-zone:hover {
+            border-color: rgba(59, 130, 246, 0.6);
+            background: rgba(59, 130, 246, 0.06);
+        }
+
+        .upload-zone:hover::before {
+            opacity: 1;
+        }
+
+        .upload-zone.drag-over {
+            border-color: #3b82f6;
+            background: rgba(59, 130, 246, 0.1);
+            transform: scale(1.01);
+        }
+
+        .upload-zone .upload-icon {
+            font-size: 3rem;
+            margin-bottom: 16px;
+            display: block;
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-8px); }
+        }
+
+        .upload-zone h3 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #e2e8f0;
+            margin-bottom: 8px;
+        }
+
+        .upload-zone p {
+            font-size: 0.85rem;
+            color: #64748b;
+        }
+
+        .upload-zone .format-badge {
+            display: inline-block;
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            border-radius: 6px;
+            padding: 4px 10px;
+            font-size: 0.7rem;
+            color: #60a5fa;
+            margin: 4px;
+            font-weight: 500;
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        /* ═══════════════════════════════════════════
+           IMAGE PREVIEW
+           ═══════════════════════════════════════════ */
+        .image-preview {
+            display: none;
+            margin-top: 20px;
+        }
+
+        .image-preview.active {
+            display: block;
+            animation: fadeSlideIn 0.4s ease;
+        }
+
+        .preview-container {
+            position: relative;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid rgba(148, 163, 184, 0.1);
+            background: #0f172a;
+        }
+
+        .preview-container img {
+            width: 100%;
+            height: auto;
+            display: block;
+            max-height: 400px;
+            object-fit: contain;
+        }
+
+        .file-info {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            background: rgba(15, 23, 42, 0.9);
+            border-top: 1px solid rgba(148, 163, 184, 0.08);
+        }
+
+        .file-info .name {
+            font-size: 0.85rem;
+            color: #94a3b8;
+            font-weight: 500;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 70%;
+        }
+
+        .file-info .size {
+            font-size: 0.75rem;
+            color: #64748b;
+            background: rgba(148, 163, 184, 0.08);
+            padding: 4px 10px;
+            border-radius: 6px;
+        }
+
+        .remove-btn {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+            border-radius: 8px;
+            padding: 6px 14px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-family: inherit;
+            font-weight: 500;
+            margin-top: 12px;
+        }
+
+        .remove-btn:hover {
+            background: rgba(239, 68, 68, 0.2);
+            border-color: rgba(239, 68, 68, 0.4);
+        }
+
+        /* ═══════════════════════════════════════════
+           CONVERT BUTTON
+           ═══════════════════════════════════════════ */
+        .convert-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            width: 100%;
+            padding: 16px 24px;
+            margin-top: 24px;
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            border: none;
+            border-radius: 14px;
+            color: white;
+            font-size: 1rem;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .convert-btn::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, transparent 50%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .convert-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(59, 130, 246, 0.35);
+        }
+
+        .convert-btn:hover:not(:disabled)::before {
+            opacity: 1;
+        }
+
+        .convert-btn:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        .convert-btn:disabled {
+            background: rgba(59, 130, 246, 0.2);
+            color: rgba(255, 255, 255, 0.4);
+            cursor: not-allowed;
+        }
+
+        .convert-btn.loading {
+            pointer-events: none;
+        }
+
+        /* ═══════════════════════════════════════════
+           SPINNER
+           ═══════════════════════════════════════════ */
+        .spinner {
+            display: none;
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        .loading .spinner {
+            display: block;
+        }
+
+        .loading .btn-text {
+            display: none;
+        }
+
+        .loading .btn-loading-text {
+            display: inline;
+        }
+
+        .btn-loading-text {
+            display: none;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* ═══════════════════════════════════════════
+           RESULT SECTION
+           ═══════════════════════════════════════════ */
+        .result-section {
+            display: none;
+            animation: fadeSlideIn 0.5s ease;
+        }
+
+        .result-section.active {
+            display: block;
+        }
+
+        @keyframes fadeSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(16px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .result-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .stats {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .stat-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            background: rgba(16, 185, 129, 0.08);
+            border: 1px solid rgba(16, 185, 129, 0.15);
+            border-radius: 8px;
+            font-size: 0.75rem;
+            color: #34d399;
+            font-weight: 500;
+        }
+
+        /* ═══════════════════════════════════════════
+           TABLE PREVIEW
+           ═══════════════════════════════════════════ */
+        .table-wrapper {
+            overflow-x: auto;
+            border-radius: 12px;
+            border: 1px solid rgba(148, 163, 184, 0.1);
+            -webkit-overflow-scrolling: touch;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        .preview-table {
+            border-collapse: collapse;
+            width: 100%;
+            min-width: 600px;
+            font-size: 0.8rem;
+        }
+
+        .preview-table td {
+            padding: 6px 10px;
+            border: 1px solid rgba(0, 0, 0, 0.25);
+            text-align: center;
+            white-space: nowrap;
+            font-weight: 500;
+            transition: transform 0.15s ease;
+        }
+
+        .preview-table td:first-child {
+            text-align: left;
+            font-weight: 500;
+            min-width: 140px;
+        }
+
+        .preview-table td:hover {
+            transform: scale(1.05);
+            z-index: 1;
+            position: relative;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+
+        .preview-table tr.header-row td {
+            font-weight: 700;
+            font-size: 0.82rem;
+        }
+
+        /* ═══════════════════════════════════════════
+           DOWNLOAD BUTTON
+           ═══════════════════════════════════════════ */
+        .download-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            width: 100%;
+            padding: 16px 24px;
+            margin-top: 24px;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            border: none;
+            border-radius: 14px;
+            color: white;
+            font-size: 1rem;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+        }
+
+        .download-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(16, 185, 129, 0.35);
+        }
+
+        .download-btn:active {
+            transform: translateY(0);
+        }
+
+        /* ═══════════════════════════════════════════
+           COLOR LEGEND
+           ═══════════════════════════════════════════ */
+        .legend-section {
+            margin-top: 16px;
+        }
+
+        .legend-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            justify-content: center;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 14px;
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid rgba(148, 163, 184, 0.08);
+            border-radius: 10px;
+            font-size: 0.8rem;
+            color: #94a3b8;
+            transition: all 0.2s ease;
+        }
+
+        .legend-item:hover {
+            border-color: rgba(148, 163, 184, 0.2);
+            background: rgba(15, 23, 42, 0.8);
+        }
+
+        .legend-color {
+            width: 18px;
+            height: 18px;
+            border-radius: 5px;
+            border: 1px solid rgba(0, 0, 0, 0.2);
+            flex-shrink: 0;
+        }
+
+        /* ═══════════════════════════════════════════
+           ERROR STATE
+           ═══════════════════════════════════════════ */
+        .error-msg {
+            display: none;
+            padding: 16px 20px;
+            background: rgba(239, 68, 68, 0.08);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            border-radius: 12px;
+            color: #fca5a5;
+            font-size: 0.85rem;
+            margin-top: 16px;
+            line-height: 1.5;
+        }
+
+        .error-msg.active {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            animation: fadeSlideIn 0.3s ease;
+        }
+
+        .error-msg .error-icon {
+            font-size: 1.1rem;
+            flex-shrink: 0;
+            margin-top: 1px;
+        }
+
+        /* ═══════════════════════════════════════════
+           SUCCESS MESSAGE
+           ═══════════════════════════════════════════ */
+        .success-toast {
+            position: fixed;
+            top: 24px;
+            right: 24px;
+            padding: 14px 22px;
+            background: rgba(16, 185, 129, 0.15);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            border-radius: 12px;
+            color: #34d399;
+            font-size: 0.85rem;
+            font-weight: 500;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            animation: slideInRight 0.4s ease, fadeOut 0.4s ease 2.6s forwards;
+        }
+
+        @keyframes slideInRight {
+            from { opacity: 0; transform: translateX(40px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        @keyframes fadeOut {
+            to { opacity: 0; transform: translateY(-10px); }
+        }
+
+        /* ═══════════════════════════════════════════
+           FOOTER
+           ═══════════════════════════════════════════ */
+        .footer {
+            text-align: center;
+            padding: 32px 24px 48px;
+            color: #475569;
+            font-size: 0.8rem;
+        }
+
+        .footer a {
+            color: #60a5fa;
+            text-decoration: none;
+        }
+
+        /* ═══════════════════════════════════════════
+           RESPONSIVE
+           ═══════════════════════════════════════════ */
+        @media (max-width: 640px) {
+            .header h1 {
+                font-size: 1.6rem;
+            }
+
+            .header {
+                padding: 32px 16px 12px;
+            }
+
+            .container {
+                padding: 16px;
+            }
+
+            .card {
+                padding: 20px;
+                border-radius: 16px;
+            }
+
+            .upload-zone {
+                padding: 32px 16px;
+            }
+
+            .stats {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .legend-grid {
+                gap: 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-gradient"></div>
+
+    <!-- ═══ HEADER ═══ -->
+    <header class="header">
+        <div class="header-badge">
+            <span>🌧️</span>
+            <span>BMKG Jawa Timur</span>
+        </div>
+        <h1>Rainfall Matrix Converter</h1>
+        <p>Konversi gambar Matriks Curah Hujan ke Excel dengan preservasi warna 100%</p>
+    </header>
+
+    <div class="container">
+        <!-- ═══ UPLOAD CARD ═══ -->
+        <section class="card" id="uploadCard">
+            <div class="card-title">
+                <span class="icon">📁</span>
+                Upload Gambar
+            </div>
+
+            <!-- Drop Zone -->
+            <div class="upload-zone" id="dropZone">
+                <span class="upload-icon">🖼️</span>
+                <h3>Drop gambar di sini</h3>
+                <p>atau klik untuk memilih file</p>
+                <div style="margin-top: 14px;">
+                    <span class="format-badge">JPG</span>
+                    <span class="format-badge">JPEG</span>
+                    <span class="format-badge">PNG</span>
+                </div>
+                <input type="file" id="fileInput" accept=".jpg,.jpeg,.png,.bmp">
+            </div>
+
+            <!-- Image Preview -->
+            <div class="image-preview" id="imagePreview">
+                <div class="preview-container">
+                    <img id="previewImg" alt="Preview gambar">
+                    <div class="file-info">
+                        <span class="name" id="fileName">—</span>
+                        <span class="size" id="fileSize">—</span>
+                    </div>
+                </div>
+                <button class="remove-btn" id="removeBtn">✕ Hapus gambar</button>
+            </div>
+
+            <!-- Error Message -->
+            <div class="error-msg" id="errorMsg">
+                <span class="error-icon">⚠️</span>
+                <span id="errorText"></span>
+            </div>
+
+            <!-- Convert Button -->
+            <button class="convert-btn" id="convertBtn" disabled>
+                <span class="spinner"></span>
+                <span class="btn-text">🔄 Konversi Sekarang</span>
+                <span class="btn-loading-text">Memproses gambar...</span>
+            </button>
+        </section>
+
+        <!-- ═══ RESULT CARD ═══ -->
+        <section class="card result-section" id="resultSection">
+            <div class="result-header">
+                <div class="card-title" style="margin-bottom: 0;">
+                    <span class="icon">📊</span>
+                    Hasil Konversi
+                </div>
+                <div class="stats" id="statsContainer">
+                    <!-- Diisi oleh JS -->
+                </div>
+            </div>
+
+            <!-- Table Preview -->
+            <div class="table-wrapper">
+                <table class="preview-table" id="previewTable">
+                    <!-- Diisi oleh JS -->
+                </table>
+            </div>
+
+            <!-- Download Button -->
+            <a class="download-btn" id="downloadBtn" href="#" download>
+                <span>💾</span>
+                Download Excel
+            </a>
+        </section>
+
+        <!-- ═══ COLOR LEGEND ═══ -->
+        <section class="legend-section">
+            <div class="legend-grid">
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #00FF00;"></div>
+                    <span>Ringan</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #FFFF00;"></div>
+                    <span>Sedang</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #FF8C00;"></div>
+                    <span>Lebat</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #FF0000;"></div>
+                    <span>Sangat Lebat</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #C0C0C0;"></div>
+                    <span>Belum Ada Data</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #FFFFFF;"></div>
+                    <span>Kosong</span>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- ═══ FOOTER ═══ -->
+    <footer class="footer">
+        <p>BMKG Rainfall Matrix Converter — Magang 2026</p>
+    </footer>
+
+    <script>
+        /* ═══════════════════════════════════════════
+           STATE
+           ═══════════════════════════════════════════ */
+        let selectedFile = null;
+
+        /* ═══════════════════════════════════════════
+           DOM ELEMENTS
+           ═══════════════════════════════════════════ */
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const imagePreview = document.getElementById('imagePreview');
+        const previewImg = document.getElementById('previewImg');
+        const fileName = document.getElementById('fileName');
+        const fileSize = document.getElementById('fileSize');
+        const removeBtn = document.getElementById('removeBtn');
+        const convertBtn = document.getElementById('convertBtn');
+        const errorMsg = document.getElementById('errorMsg');
+        const errorText = document.getElementById('errorText');
+        const resultSection = document.getElementById('resultSection');
+        const previewTable = document.getElementById('previewTable');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const statsContainer = document.getElementById('statsContainer');
+
+        /* ═══════════════════════════════════════════
+           FILE UPLOAD HANDLERS
+           ═══════════════════════════════════════════ */
+
+        // Click to upload
+        dropZone.addEventListener('click', () => fileInput.click());
+
+        // File selected
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files[0]) {
+                handleFile(e.target.files[0]);
+            }
+        });
+
+        // Drag & Drop
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('drag-over');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('drag-over');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('drag-over');
+            if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                handleFile(e.dataTransfer.files[0]);
+            }
+        });
+
+        // Remove file
+        removeBtn.addEventListener('click', () => {
+            resetUpload();
+        });
+
+        function handleFile(file) {
+            // Validate
+            const validTypes = ['image/jpeg', 'image/png', 'image/bmp'];
+            if (!validTypes.includes(file.type)) {
+                showError('Format file tidak didukung. Gunakan JPG atau PNG.');
+                return;
+            }
+
+            if (file.size > 16 * 1024 * 1024) {
+                showError('Ukuran file terlalu besar (max 16MB).');
+                return;
+            }
+
+            selectedFile = file;
+            hideError();
+
+            // Show preview
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                previewImg.src = e.target.result;
+                fileName.textContent = file.name;
+                fileSize.textContent = formatSize(file.size);
+
+                dropZone.style.display = 'none';
+                imagePreview.classList.add('active');
+                convertBtn.disabled = false;
+            };
+            reader.readAsDataURL(file);
+
+            // Hide previous results
+            resultSection.classList.remove('active');
+        }
+
+        function resetUpload() {
+            selectedFile = null;
+            fileInput.value = '';
+            previewImg.src = '';
+
+            dropZone.style.display = '';
+            imagePreview.classList.remove('active');
+            convertBtn.disabled = true;
+            resultSection.classList.remove('active');
+            hideError();
+        }
+
+        function formatSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+
+        /* ═══════════════════════════════════════════
+           CONVERSION
+           ═══════════════════════════════════════════ */
+        convertBtn.addEventListener('click', async () => {
+            if (!selectedFile) return;
+
+            // Set loading state
+            convertBtn.classList.add('loading');
+            convertBtn.disabled = true;
+            hideError();
+            resultSection.classList.remove('active');
+
+            try {
+                const formData = new FormData();
+                formData.append('file', selectedFile);
+
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                const data = await response.json();
+
+                if (!data.success) {
+                    showError(data.error || 'Terjadi kesalahan saat memproses gambar.');
+                    return;
+                }
+
+                // Render results
+                renderPreview(data.preview);
+                renderStats(data.stats);
+                downloadBtn.href = data.downloadUrl;
+
+                resultSection.classList.add('active');
+
+                // Scroll to results
+                setTimeout(() => {
+                    resultSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 100);
+
+                // Show success toast
+                showToast('✅ Konversi berhasil!');
+
+            } catch (err) {
+                console.error(err);
+                showError('Gagal terhubung ke server. Pastikan server berjalan.');
+            } finally {
+                convertBtn.classList.remove('loading');
+                convertBtn.disabled = false;
+            }
+        });
+
+        /* ═══════════════════════════════════════════
+           RENDER PREVIEW TABLE
+           ═══════════════════════════════════════════ */
+        function renderPreview(preview) {
+            let html = '';
+
+            for (const row of preview.rows) {
+                const rowClass = row.isHeader ? ' class="header-row"' : '';
+                html += `<tr${rowClass}>`;
+
+                for (const cell of row.cells) {
+                    const bg = cell.color || '#FFFFFF';
+                    const text = cell.text || '';
+
+                    // Text color based on background brightness
+                    const textColor = getTextColor(bg);
+
+                    html += `<td style="background-color: ${bg}; color: ${textColor};">${escapeHtml(text)}</td>`;
+                }
+
+                html += '</tr>';
+            }
+
+            previewTable.innerHTML = html;
+        }
+
+        function renderStats(stats) {
+            statsContainer.innerHTML = `
+                <span class="stat-badge">📐 ${stats.rows} × ${stats.cols}</span>
+                <span class="stat-badge">⚡ ${stats.time}s</span>
+            `;
+        }
+
+        function getTextColor(hex) {
+            // Parse hex color
+            hex = hex.replace('#', '');
+            if (hex.length === 3) {
+                hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
+            }
+            const r = parseInt(hex.substring(0, 2), 16);
+            const g = parseInt(hex.substring(2, 4), 16);
+            const b = parseInt(hex.substring(4, 6), 16);
+            const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+            return brightness > 128 ? '#000000' : '#FFFFFF';
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        /* ═══════════════════════════════════════════
+           ERROR / TOAST
+           ═══════════════════════════════════════════ */
+        function showError(msg) {
+            errorText.textContent = msg;
+            errorMsg.classList.add('active');
+        }
+
+        function hideError() {
+            errorMsg.classList.remove('active');
+        }
+
+        function showToast(msg) {
+            const toast = document.createElement('div');
+            toast.className = 'success-toast';
+            toast.textContent = msg;
+            document.body.appendChild(toast);
+
+            setTimeout(() => {
+                toast.remove();
+            }, 3200);
+        }
+    </script>
+</body>
+</html>
