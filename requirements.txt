@@ -1,5 +1,5 @@
-opencv-python>=4.5.0
-openpyxl>=3.0.0
+opencv-python-headless>=4.5.0
+xlsxwriter>=3.0.0
 pytesseract>=0.3.8
 Pillow>=8.0.0
 numpy>=1.19.0
