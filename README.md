@@ -103,7 +103,7 @@ sudo apt update && sudo apt install tesseract-ocr
 1. **Clone the repository**
 
    ```bash
-   git clone https://github.com/your-username/convert-png.git
+   git clone https://github.com/Alvinmff/ConvertPNG.git
    cd convert-png
    ```
 
