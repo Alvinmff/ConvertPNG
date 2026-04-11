@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="id">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,10 +8,13 @@
     <meta name="description" content="Konversi gambar Matriks Curah Hujan BMKG ke Excel dengan preservasi warna 100%">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/favicon.png') }}">
     <!-- Link External CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
+
 <body>
     <div class="bg-gradient"></div>
 
@@ -149,28 +153,32 @@
                     <div class="step-num">1</div>
                     <div class="step-body">
                         <h4>Siapkan Gambar</h4>
-                        <p>Pastikan gambar "Matriks Curah Hujan" memiliki pencahayaan cukup, tidak miring, dan seluruh grid tabel terlihat jelas.</p>
+                        <p>Pastikan gambar "Matriks Curah Hujan" memiliki pencahayaan cukup, tidak miring, dan seluruh
+                            grid tabel terlihat jelas.</p>
                     </div>
                 </div>
                 <div class="guide-step">
                     <div class="step-num">2</div>
                     <div class="step-body">
                         <h4>Upload ke Aplikasi</h4>
-                        <p>Tarik gambar ke area upload atau klik kotak upload untuk memilih file foto dari komputer/HP Anda.</p>
+                        <p>Tarik gambar ke area upload atau klik kotak upload untuk memilih file foto dari komputer/HP
+                            Anda.</p>
                     </div>
                 </div>
                 <div class="guide-step">
                     <div class="step-num">3</div>
                     <div class="step-body">
                         <h4>Mulai Konversi</h4>
-                        <p>Klik tombol <b>Konversi Sekarang</b>. Sistem akan menggunakan AI & OCR untuk mendeteksi warna dan angka di setiap sel.</p>
+                        <p>Klik tombol <b>Konversi Sekarang</b>. Sistem akan menggunakan AI & OCR untuk mendeteksi warna
+                            dan angka di setiap sel.</p>
                     </div>
                 </div>
                 <div class="guide-step">
                     <div class="step-num">4</div>
                     <div class="step-body">
                         <h4>Cek & Download</h4>
-                        <p>Periksa hasil konversi pada tabel preview di bawah. Jika sudah sesuai, klik <b>Download Excel</b> untuk menyimpan file.</p>
+                        <p>Periksa hasil konversi pada tabel preview di bawah. Jika sudah sesuai, klik <b>Download
+                                Excel</b> untuk menyimpan file.</p>
                     </div>
                 </div>
             </div>
@@ -180,4 +188,5 @@
     <!-- Link External JS -->
     <script src="{{ url_for('static', filename='js/script.js') }}"></script>
 </body>
+
 </html>
