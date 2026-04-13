@@ -40,6 +40,8 @@ const resultSection = document.getElementById('resultSection');
 const previewTable = document.getElementById('previewTable');
 const downloadBtn = document.getElementById('downloadBtn');
 const statsContainer = document.getElementById('statsContainer');
+const summarySection = document.getElementById('summarySection');
+const summaryGrid = document.getElementById('summaryGrid');
 
 /* ═══════════════════════════════════════════
    FILE UPLOAD HANDLERS
@@ -117,6 +119,7 @@ function handleFile(file) {
 
     // Hide previous results
     resultSection.classList.remove('active');
+    if (summarySection) summarySection.classList.remove('active');
 }
 
 function resetUpload() {
@@ -128,6 +131,7 @@ function resetUpload() {
     imagePreview.classList.remove('active');
     convertBtn.disabled = true;
     resultSection.classList.remove('active');
+    if (summarySection) summarySection.classList.remove('active');
     hideError();
 }
 
@@ -149,6 +153,7 @@ if (convertBtn) {
         convertBtn.disabled = true;
         hideError();
         resultSection.classList.remove('active');
+        if (summarySection) summarySection.classList.remove('active');
 
         try {
             const formData = new FormData();
@@ -169,9 +174,15 @@ if (convertBtn) {
             // Render results
             renderPreview(data.preview);
             renderStats(data.stats);
+            if (data.preview.summary) {
+                renderSummary(data.preview.summary);
+            }
             downloadBtn.href = data.downloadUrl;
 
             resultSection.classList.add('active');
+            if (data.preview.summary && Object.keys(data.preview.summary).length > 0) {
+                summarySection.classList.add('active');
+            }
 
             // Scroll to results
             setTimeout(() => {
@@ -222,6 +233,60 @@ function renderStats(stats) {
         <span class="stat-badge">📐 ${stats.rows} × ${stats.cols}</span>
         <span class="stat-badge">⚡ ${stats.time}s</span>
     `;
+}
+
+function renderSummary(summaryObj) {
+    if (!summaryGrid) return;
+    
+    let html = '';
+    
+    // Sort keys just in case (kolom_1, kolom_2, dsb)
+    const columns = Object.keys(summaryObj).sort();
+    
+    if (columns.length === 0) {
+        html = '<div style="grid-column: 1/-1; text-align: center; color: #94a3b8; padding: 20px;">Tidak ada tanggal yang dapat dianalisis.</div>';
+        summaryGrid.innerHTML = html;
+        return;
+    }
+    
+    for (const colKey of columns) {
+        const data = summaryObj[colKey];
+        
+        // Buat helper untuk format daftar list
+        const formatItem = (title, count, cities, typeClass, emoji) => {
+            if (count === 0) return '';
+            
+            const citiesStr = cities.length > 0 ? cities.join(', ') : '';
+            const suffix = cities.length < count ? '...' : '';
+            
+            return `
+            <div class="summary-item ${typeClass}">
+                <div class="summary-item-header">
+                    <span>${emoji} ${title}</span>
+                    <span>${count}</span>
+                </div>
+                <div class="summary-cities">${citiesStr}${suffix}</div>
+            </div>`;
+        };
+        
+        let columnHtml = `
+            <div class="summary-col">
+                <div class="summary-header">Tanggal: ${escapeHtml(data.tanggal)}</div>
+                
+                ${formatItem('Oranye', data.oranye_count, data.oranye_cities, 'oranye', '🟧')}
+                ${formatItem('Merah', data.merah_count, data.merah_cities, 'merah', '🟥')}
+                ${formatItem('Ekstrem', data.ungu_count, data.ungu_cities, 'ungu', '🟪')}
+                
+                ${data.total === 0 ? '<div style="text-align:center; color:#64748b; font-size:0.8rem; margin:auto 0;">Aman, tidak ada indikator ekstrem</div>' : ''}
+                
+                <div class="summary-total">Total Kejadian: ${data.total}</div>
+            </div>
+        `;
+        
+        html += columnHtml;
+    }
+    
+    summaryGrid.innerHTML = html;
 }
 
 function getTextColor(hex) {

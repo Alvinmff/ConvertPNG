@@ -38,15 +38,19 @@ class BMKGRainfallExtractor:
         "Kota Madiun", "Kota Surabaya", "Kota Batu"
     ]
 
-    # Warna standar BMKG
+    # Warna standar BMKG + UNGU (Ekstrem)
     COLOR_DEFS = {
         'hijau':  {'hex': '00FF00', 'css': '#00FF00', 'label': 'Ringan'},
         'kuning': {'hex': 'FFFF00', 'css': '#FFFF00', 'label': 'Sedang'},
         'oranye': {'hex': 'FF8C00', 'css': '#FF8C00', 'label': 'Lebat'},
         'merah':  {'hex': 'FF0000', 'css': '#FF0000', 'label': 'Sangat Lebat'},
+        'ungu':   {'hex': '8B00FF', 'css': '#8B00FF', 'label': 'Ekstrem'},  # Warna baru
         'abu':    {'hex': 'C0C0C0', 'css': '#C0C0C0', 'label': 'Belum Ada Data'},
         'putih':  {'hex': 'FFFFFF', 'css': '#FFFFFF', 'label': 'Kosong'},
     }
+
+    # Target warna untuk ringkasan (Oranye, Merah, Ungu)
+    HIGH_INDICATOR_COLORS = ['oranye', 'merah', 'ungu']
 
     def __init__(self, tesseract_cmd=None):
         if tesseract_cmd:
@@ -111,10 +115,19 @@ class BMKGRainfallExtractor:
             if v_med > 200: return 'putih'
             else: return 'abu'
         else:
-            if h_med < 8 or h_med > 168: return 'merah'
-            elif h_med < 23: return 'oranye'
-            elif h_med < 38: return 'kuning'
-            else: return 'hijau'
+            # Deteksi warna berdasarkan Hue (HSV OpenCV: 0-179)
+            if h_med < 8 or h_med > 172: 
+                return 'merah'
+            elif 8 <= h_med < 20: 
+                return 'oranye'
+            elif 20 <= h_med < 38: 
+                return 'kuning'
+            elif 100 <= h_med < 130: 
+                return 'hijau'
+            elif 130 <= h_med < 160:  # Range Ungu/Violet
+                return 'ungu'
+            else: 
+                return 'hijau'  # Default fallback
 
     def _ocr_cell(self, roi, whitelist=None, psm=7):
         if roi.size == 0: return ""
@@ -124,7 +137,17 @@ class BMKGRainfallExtractor:
         if h < min_height:
             scale = min_height / h
             gray = cv2.resize(gray, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_CUBIC)
-        _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            
+        # Tambahkan blur untuk menghaluskan noise sebelum thresholding OTSU
+        blurred = cv2.GaussianBlur(gray, (3, 3), 0)
+        _, binary = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        
+        # Cek apakah background hitam (jika hasil otsu terbalik). 
+        # Area pinggir dipastikan adalah background setelah di-cropping aman.
+        corners = [binary[0,0], binary[0,-1], binary[-1,0], binary[-1,-1]]
+        if sum(corners) < 255 * 2: # Artinya lebih banyak piksel hitam di pojok
+            binary = cv2.bitwise_not(binary)
+            
         padded = cv2.copyMakeBorder(binary, 15, 15, 15, 15, cv2.BORDER_CONSTANT, value=255)
         config = f'--oem 3 --psm {psm}'
         if whitelist: config += f' -c tessedit_char_whitelist={whitelist}'
@@ -132,12 +155,22 @@ class BMKGRainfallExtractor:
             return pytesseract.image_to_string(padded, config=config).strip()
         except: return ""
 
-    def _ocr_header_numbers(self, img, h_positions, v_positions, header_row=0):
-        rows_to_try = [header_row]
-        if len(h_positions) > 3: rows_to_try.append(2)
-        for try_row in rows_to_try:
-            numbers = self._try_ocr_header_row(img, h_positions, v_positions, try_row)
-            if sum(1 for n in numbers if n) > 0: return numbers
+
+
+    def _get_best_header_numbers(self, img, h_positions, v_positions):
+        nums0 = self._try_ocr_header_row(img, h_positions, v_positions, 0)
+        nums2 = []
+        if len(h_positions) > 3:
+            nums2 = self._try_ocr_header_row(img, h_positions, v_positions, 2)
+            
+        valid0 = sum(1 for n in nums0 if n)
+        valid2 = sum(1 for n in nums2 if n)
+        
+        # Ambil hasil OCR terbaik dari baris 0 atau baris 2
+        if valid0 > 0 or valid2 > 0:
+            return nums0 if valid0 >= valid2 else nums2
+            
+        # Fallback jika OCR sama sekali tidak berhasil (kasus foto sangat buram/berbeda)
         num_data_cols = len(v_positions) - 2
         return [str(i).zfill(2) for i in range(1, num_data_cols + 1)]
 
@@ -147,12 +180,17 @@ class BMKGRainfallExtractor:
         y1, y2 = h_positions[row_idx], h_positions[row_idx + 1]
         for col in range(1, len(v_positions) - 1):
             x1, x2 = v_positions[col], v_positions[col + 1]
-            pad = 2
-            cy1, cy2 = max(0, y1 + pad), max(0, y2 - pad)
-            cx1, cx2 = max(0, x1 + pad), max(0, x2 - pad)
+            # Tingkatkan margin cropping menjadi 15% dari tinggi/lebar cell.
+            # Ini akan membuang garis tepi hitam kolom excel, sehingga Otsu threshold murni membaca background dan teks saja.
+            pad_y = int((y2 - y1) * 0.15)
+            pad_x = int((x2 - x1) * 0.15)
+            cy1, cy2 = y1 + pad_y, y2 - pad_y
+            cx1, cx2 = x1 + pad_x, x2 - pad_x
+            
             if cy2 <= cy1 or cx2 <= cx1:
                 numbers.append("")
                 continue
+                
             roi = img[cy1:cy2, cx1:cx2]
             text = ""
             for psm in [8, 7, 13]:
@@ -184,6 +222,54 @@ class BMKGRainfallExtractor:
                 except: pass
         return ""
 
+    def _analyze_high_indicators(self, table_data):
+        """
+        Analisis data untuk kolom 1-3 (indeks 1, 2, 3 setelah kolom nama).
+        Return: dict dengan struktur {col_idx: {'oranye': [...], 'merah': [...], 'ungu': [...]}}
+        """
+        summary = {1: {'oranye': [], 'merah': [], 'ungu': []},
+                   2: {'oranye': [], 'merah': [], 'ungu': []},
+                   3: {'oranye': [], 'merah': [], 'ungu': []}}
+        
+        for row_data in table_data['rows']:
+            # Lewati header rows (row 0, 1, 2)
+            if row_data.get('is_header', False):
+                continue
+            
+            cells = row_data.get('cells', [])
+            if len(cells) < 2:
+                continue
+            
+            # Nama kota di kolom pertama (indeks 0)
+            city_name = cells[0].get('text', '').strip()
+            if not city_name or city_name.lower() in ['jawa timur', 'provinsi', 'kab/kota', 'jawa  timur']:
+                continue
+            
+            # Analisis kolom 1, 2, 3 (indeks 1, 2, 3)
+            for col_idx in [1, 2, 3]:
+                if col_idx < len(cells):
+                    color_name = cells[col_idx].get('color_name', 'putih')
+                    if color_name in self.HIGH_INDICATOR_COLORS:
+                        summary[col_idx][color_name].append(city_name)
+        
+        # Tambahkan header tanggal ke summary
+        result = {}
+        for col_idx in [1, 2, 3]:
+            header_val = ""
+            if len(table_data['rows']) > 0 and col_idx < len(table_data['rows'][0]['cells']):
+                header_val = table_data['rows'][0]['cells'][col_idx].get('text', '')
+            if not header_val and len(table_data['rows']) > 2 and col_idx < len(table_data['rows'][2]['cells']):
+                header_val = table_data['rows'][2]['cells'][col_idx].get('text', '')
+            if not header_val:
+                header_val = str(col_idx).zfill(2)
+                
+            result[col_idx] = {
+                'tanggal': header_val,
+                'data': summary[col_idx],
+                'total': len(summary[col_idx]['oranye']) + len(summary[col_idx]['merah']) + len(summary[col_idx]['ungu'])
+            }
+        return result
+
     def extract(self, image_path):
         img = cv2.imread(image_path)
         if img is None: raise ValueError(f"Gagal membaca gambar: {image_path}")
@@ -191,11 +277,11 @@ class BMKGRainfallExtractor:
         if len(h_positions) < 4 or len(v_positions) < 3:
             raise ValueError("Gagal mendeteksi grid tabel. Pastikan gambar jelas.")
         num_rows, num_cols = len(h_positions) - 1, len(v_positions) - 1
-        header_numbers = self._ocr_header_numbers(img, h_positions, v_positions, header_row=0)
         footer = self._extract_footer(img, h_positions)
+        header_numbers = self._get_best_header_numbers(img, h_positions, v_positions)
+        
         table = {
             'title': 'Matriks Curah Hujan Kabupaten di Jawa Timur',
-            'headers': header_numbers,
             'num_cols': num_cols,
             'rows': [],
             'footer': footer,
@@ -239,15 +325,66 @@ class BMKGRainfallExtractor:
                 if row_data['cells']: row_data['cells'][0]['text'] = name
                 data_row_index += 1
             table['rows'].append(row_data)
+        
+        # Analisis untuk ringkasan
+        table['high_indicators_summary'] = self._analyze_high_indicators(table)
         return table
 
     def generate_excel(self, table_data, output_path):
         workbook = xlsxwriter.Workbook(output_path)
         worksheet = workbook.add_worksheet('Matriks Curah Hujan')
         num_cols = table_data.get('num_cols', 11)
-        title_format = workbook.add_format({'bold': True, 'font_size': 14, 'font_name': 'Arial', 'align': 'center', 'valign': 'vcenter'})
-        if num_cols > 1: worksheet.merge_range(0, 0, 0, num_cols - 1, table_data['title'], title_format)
-        else: worksheet.write(0, 0, table_data['title'], title_format)
+        
+        # Format definitions
+        title_format = workbook.add_format({
+            'bold': True, 'font_size': 14, 'font_name': 'Arial', 
+            'align': 'center', 'valign': 'vcenter'
+        })
+        
+        # Format untuk ringkasan
+        summary_title_format = workbook.add_format({
+            'bold': True, 'font_size': 12, 'font_name': 'Arial',
+            'bg_color': '#333333', 'font_color': '#FFFFFF',
+            'align': 'center', 'valign': 'vcenter', 'border': 1
+        })
+        
+        summary_header_format = workbook.add_format({
+            'bold': True, 'font_size': 11, 'font_name': 'Arial',
+            'bg_color': '#4472C4', 'font_color': '#FFFFFF',
+            'align': 'left', 'valign': 'vcenter', 'border': 1
+        })
+        
+        summary_oranye_format = workbook.add_format({
+            'font_size': 10, 'font_name': 'Arial',
+            'bg_color': '#FFE699', 'font_color': '#000000',  # Kuning muda untuk Oranye
+            'align': 'left', 'valign': 'vcenter', 'text_wrap': True, 'border': 1
+        })
+        
+        summary_merah_format = workbook.add_format({
+            'font_size': 10, 'font_name': 'Arial',
+            'bg_color': '#FFB3B3', 'font_color': '#000000',  # Merah muda
+            'align': 'left', 'valign': 'vcenter', 'text_wrap': True, 'border': 1
+        })
+        
+        summary_ungu_format = workbook.add_format({
+            'font_size': 10, 'font_name': 'Arial',
+            'bg_color': '#D9B3FF', 'font_color': '#000000',  # Ungu muda
+            'align': 'left', 'valign': 'vcenter', 'text_wrap': True, 'border': 1
+        })
+        
+        summary_total_format = workbook.add_format({
+            'bold': True, 'font_size': 11, 'font_name': 'Arial',
+            'bg_color': '#70AD47', 'font_color': '#FFFFFF',
+            'align': 'center', 'valign': 'vcenter', 'border': 1
+        })
+
+        # Write Title
+        if num_cols > 1: 
+            worksheet.merge_range(0, 0, 0, num_cols - 1, table_data['title'], title_format)
+        else: 
+            worksheet.write(0, 0, table_data['title'], title_format)
+        
+        # Write Main Table
         start_row, format_cache = 2, {}
         for row_idx, row_data in enumerate(table_data['rows']):
             excel_row = start_row + row_idx
@@ -262,20 +399,115 @@ class BMKGRainfallExtractor:
                 f_key = (color_hex, text_color, is_header or is_name_bold, col_idx == 0)
                 if f_key not in format_cache:
                     format_cache[f_key] = workbook.add_format({
-                        'bg_color': f"#{color_hex}", 'font_color': text_color, 'bold': is_header or is_name_bold,
+                        'bg_color': f"#{color_hex}", 'font_color': text_color, 
+                        'bold': is_header or is_name_bold,
                         'font_size': 11, 'font_name': 'Arial', 'border': 1,
-                        'align': 'left' if col_idx == 0 else 'center', 'valign': 'vcenter', 'text_wrap': col_idx == 0
+                        'align': 'left' if col_idx == 0 else 'center', 
+                        'valign': 'vcenter', 'text_wrap': col_idx == 0
                     })
                 worksheet.write(excel_row, col_idx, cell_data.get('text', ''), format_cache[f_key])
+
+        # Set row heights untuk tabel utama
         worksheet.set_row(0, 30)
         worksheet.set_row(1, 5)
-        for r in range(start_row, start_row + len(table_data['rows'])): worksheet.set_row(r, 22)
+        for r in range(start_row, start_row + len(table_data['rows'])): 
+            worksheet.set_row(r, 22)
+        
+        # Write Footer jika ada
+        footer_row = start_row + len(table_data['rows']) + 1
         if table_data.get('footer'):
-            f_row, f_format = start_row + len(table_data['rows']) + 1, workbook.add_format({'italic': True, 'font_size': 10, 'font_name': 'Arial', 'font_color': '#666666', 'align': 'center'})
-            if num_cols > 1: worksheet.merge_range(f_row, 0, f_row, num_cols - 1, table_data['footer'], f_format)
-            else: worksheet.write(f_row, 0, table_data['footer'], f_format)
+            f_format = workbook.add_format({
+                'italic': True, 'font_size': 10, 'font_name': 'Arial', 
+                'font_color': '#666666', 'align': 'center'
+            })
+            if num_cols > 1: 
+                worksheet.merge_range(footer_row, 0, footer_row, num_cols - 1, table_data['footer'], f_format)
+            else: 
+                worksheet.write(footer_row, 0, table_data['footer'], f_format)
+            footer_row += 2
+        else:
+            footer_row += 1
+
+        # Write Summary Section (Ringkasan Indikator Tinggi)
+        summary_data = table_data.get('high_indicators_summary', {})
+        
+        # Header Ringkasan
+        summary_title_row = footer_row
+        worksheet.merge_range(summary_title_row, 0, summary_title_row, 2, 
+                             'RINGKASAN INDIKATOR CURAH HUJAN TINGGI - KOLOM 1 SAMPAI 3', 
+                             summary_title_format)
+        worksheet.set_row(summary_title_row, 25)
+        
+        current_row = summary_title_row + 1
+        
+        # Data untuk 3 kolom (horizontal layout)
+        col_widths = [30, 30, 30]  # Lebar masing-masing kolom ringkasan
+        
+        # Headers per kolom tanggal
+        for i, col_idx in enumerate([1, 2, 3]):
+            if col_idx in summary_data:
+                tanggal = summary_data[col_idx]['tanggal']
+                worksheet.write(current_row, i, f'KOLOM: Tanggal {tanggal}', summary_header_format)
+                worksheet.set_column(i, i, col_widths[i])
+        
+        current_row += 1
+        
+        # Cari tinggi maksimum untuk alignment
+        max_entries = 0
+        for col_idx in [1, 2, 3]:
+            if col_idx in summary_data:
+                data = summary_data[col_idx]['data']
+                entries = max(len(data['oranye']), len(data['merah']), len(data['ungu']))
+                max_entries = max(max_entries, entries)
+        
+        # Tulis data per warna untuk setiap kolom
+        # Baris Oranye
+        for i, col_idx in enumerate([1, 2, 3]):
+            if col_idx in summary_data:
+                data = summary_data[col_idx]['data']
+                cities = data['oranye']
+                count = len(cities)
+                text = f"Oranye ({count}): {', '.join(cities) if cities else '-'}"
+                worksheet.write(current_row, i, text, summary_oranye_format)
+        
+        current_row += 1
+        
+        # Baris Merah
+        for i, col_idx in enumerate([1, 2, 3]):
+            if col_idx in summary_data:
+                data = summary_data[col_idx]['data']
+                cities = data['merah']
+                count = len(cities)
+                text = f"Merah ({count}): {', '.join(cities) if cities else '-'}"
+                worksheet.write(current_row, i, text, summary_merah_format)
+        
+        current_row += 1
+        
+        # Baris Ungu
+        for i, col_idx in enumerate([1, 2, 3]):
+            if col_idx in summary_data:
+                data = summary_data[col_idx]['data']
+                cities = data['ungu']
+                count = len(cities)
+                text = f"Ungu ({count}): {', '.join(cities) if cities else '-'}"
+                worksheet.write(current_row, i, text, summary_ungu_format)
+        
+        current_row += 1
+        
+        # Baris Total
+        for i, col_idx in enumerate([1, 2, 3]):
+            if col_idx in summary_data:
+                total = summary_data[col_idx]['total']
+                text = f"TOTAL KEJADIAN: {total}"
+                worksheet.write(current_row, i, text, summary_total_format)
+        
+        worksheet.set_row(current_row, 22)
+        
+        # Set column widths untuk tabel utama
         worksheet.set_column(0, 0, 25)
-        if num_cols > 1: worksheet.set_column(1, num_cols - 1, 5)
+        if num_cols > 1: 
+            worksheet.set_column(1, num_cols - 1, 5)
+        
         workbook.close()
         return output_path
 
@@ -343,18 +575,44 @@ def upload():
         extractor.generate_excel(table_data, output_path)
         elapsed = time.time() - s_time
         
+        # Update preview untuk menampilkan ringkasan juga
         preview_rows = []
         for row in table_data['rows']:
             preview_rows.append({
                 'cells': [{'text': c.get('text', ''), 'color': c.get('color_css', '#FFFFFF')} for c in row['cells']],
                 'isHeader': row.get('is_header', False)
             })
+        
+        # Buat preview ringkasan
+        summary_preview = {}
+        summary_data = table_data.get('high_indicators_summary', {})
+        for col_idx in [1, 2, 3]:
+            if col_idx in summary_data:
+                summary_preview[f"kolom_{col_idx}"] = {
+                    'tanggal': summary_data[col_idx]['tanggal'],
+                    'oranye_count': len(summary_data[col_idx]['data']['oranye']),
+                    'merah_count': len(summary_data[col_idx]['data']['merah']),
+                    'ungu_count': len(summary_data[col_idx]['data']['ungu']),
+                    'total': summary_data[col_idx]['total'],
+                    'oranye_cities': summary_data[col_idx]['data']['oranye'][:5],  # Limit untuk preview
+                    'merah_cities': summary_data[col_idx]['data']['merah'][:5],
+                    'ungu_cities': summary_data[col_idx]['data']['ungu'][:5]
+                }
             
         return jsonify({
             'success': True,
-            'preview': {'title': table_data['title'], 'rows': preview_rows, 'footer': table_data.get('footer', '')},
+            'preview': {
+                'title': table_data['title'], 
+                'rows': preview_rows, 
+                'footer': table_data.get('footer', ''),
+                'summary': summary_preview
+            },
             'downloadUrl': f'/download/{output_filename}',
-            'stats': {'rows': len(table_data['rows']), 'cols': table_data.get('num_cols', 11), 'time': round(elapsed, 2)}
+            'stats': {
+                'rows': len(table_data['rows']), 
+                'cols': table_data.get('num_cols', 11), 
+                'time': round(elapsed, 2)
+            }
         })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
